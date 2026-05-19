@@ -4,6 +4,8 @@ type HeroVideoProps = {
   progress: number;
 };
 
+const heroVideoSrc = `${import.meta.env.BASE_URL}media/hero-reference.mp4`;
+
 export default function HeroVideo({ progress }: HeroVideoProps) {
   const fadeOut = Math.min(1, Math.max(0, (progress - 0.2) / 0.18));
   const goldBloom = Math.min(1, Math.max(0, (progress - 0.16) / 0.18));
@@ -25,7 +27,7 @@ export default function HeroVideo({ progress }: HeroVideoProps) {
       aria-label="Reference motion hero"
     >
       <div className="hero-video-window">
-        <video src="/media/hero-reference.mp4" muted playsInline preload="auto" autoPlay loop />
+        <video src={heroVideoSrc} muted playsInline preload="auto" autoPlay loop />
         <div className="hero-video-grade" aria-hidden="true" />
       </div>
     </section>
