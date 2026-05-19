@@ -26,7 +26,7 @@ export default function GardenLanding({ progress }: GardenLandingProps) {
     >
       <div className="garden-video-backdrop" aria-hidden="true">
         <video
-          src={`${import.meta.env.BASE_URL}media/hero-reference.mp4`}
+          src={`${import.meta.env.BASE_URL}media/f4111b036102b180084745abb4f196af_raw.mp4`}
           muted
           autoPlay
           loop
@@ -37,7 +37,7 @@ export default function GardenLanding({ progress }: GardenLandingProps) {
 
       <div className="garden-video-wrap" aria-hidden="true">
         <video
-          src={`${import.meta.env.BASE_URL}media/hero-reference.mp4`}
+          src={`${import.meta.env.BASE_URL}media/f4111b036102b180084745abb4f196af_raw.mp4`}
           muted
           autoPlay
           loop
@@ -52,7 +52,7 @@ export default function GardenLanding({ progress }: GardenLandingProps) {
           <span>Light Unfolds</span>
           <span>in Silence</span>
         </h2>
-        <p lang="zh-CN">静谧之中，光自舒展</p>
+        <p>Light unfolds in the quiet.</p>
       </div>
     </section>
   );
