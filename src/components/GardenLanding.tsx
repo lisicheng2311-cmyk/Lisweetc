@@ -6,7 +6,6 @@ type GardenLandingProps = {
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const range = (value: number, start: number, end: number) => clamp01((value - start) / (end - start));
-const gardenVideoSrc = `${import.meta.env.BASE_URL}media/f4111b036102b180084745abb4f196af_raw.mp4`;
 
 export default function GardenLanding({ progress }: GardenLandingProps) {
   const enter = range(progress, 0.75, 0.91);
@@ -27,7 +26,7 @@ export default function GardenLanding({ progress }: GardenLandingProps) {
     >
       <div className="garden-video-backdrop" aria-hidden="true">
         <video
-          src={gardenVideoSrc}
+          src={`${import.meta.env.BASE_URL}media/f4111b036102b180084745abb4f196af_raw.mp4`}
           muted
           autoPlay
           loop
@@ -38,7 +37,7 @@ export default function GardenLanding({ progress }: GardenLandingProps) {
 
       <div className="garden-video-wrap" aria-hidden="true">
         <video
-          src={gardenVideoSrc}
+          src={`${import.meta.env.BASE_URL}media/f4111b036102b180084745abb4f196af_raw.mp4`}
           muted
           autoPlay
           loop
