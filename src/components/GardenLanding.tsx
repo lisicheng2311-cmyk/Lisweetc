@@ -26,7 +26,7 @@ export default function GardenLanding({ progress }: GardenLandingProps) {
     >
       <div className="garden-video-backdrop" aria-hidden="true">
         <video
-          src={`${import.meta.env.BASE_URL}media/f4111b036102b180084745abb4f196af_raw.mp4`}
+          src={`${import.meta.env.BASE_URL}media/hero-reference.mp4`}
           muted
           autoPlay
           loop
@@ -37,7 +37,7 @@ export default function GardenLanding({ progress }: GardenLandingProps) {
 
       <div className="garden-video-wrap" aria-hidden="true">
         <video
-          src={`${import.meta.env.BASE_URL}media/f4111b036102b180084745abb4f196af_raw.mp4`}
+          src={`${import.meta.env.BASE_URL}media/hero-reference.mp4`}
           muted
           autoPlay
           loop
