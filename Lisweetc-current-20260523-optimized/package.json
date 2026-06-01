@@ -1,0 +1,29 @@
+{
+  "name": "immersive-webgl-work-index",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "seed:emotions": "node scripts/seedEmotionFragments.js"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.0.0",
+    "@supabase/supabase-js": "^2.106.1",
+    "gsap": "^3.12.5",
+    "lenis": "^1.1.18",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.172.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.184.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

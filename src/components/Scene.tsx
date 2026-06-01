@@ -1,17 +1,21 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, ThreeEvent, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import OrbitalFrame from "./OrbitalFrame";
 import ProjectCard from "./ProjectCard";
-import { PROJECTS } from "../data/projects";
+import type { EmotionFragment } from "../data/projects";
 import { clamp01, mix, smoothstep } from "../utils/math";
 import { glslNoise } from "../utils/noise";
 
 type SceneProps = {
   progress: number;
   activeIndex: number;
+  fragments: EmotionFragment[];
+  ambientFragments?: EmotionFragment[];
+  onSelectFragment?: (fragment: EmotionFragment) => void;
 };
 
 type UniformSet = {
@@ -19,11 +23,15 @@ type UniformSet = {
   uProgress: { value: number };
   uPixelRatio: { value: number };
   uMouse: { value: THREE.Vector2 };
+  uMouseWorld: { value: THREE.Vector2 };
 };
+
+const disableRaycast = () => null;
 
 const particleVertex = `
   attribute vec3 aHome;
   attribute vec3 aFlow;
+  attribute vec3 aDrift;
   attribute float aSize;
   attribute float aPhase;
   attribute float aKind;
@@ -32,6 +40,7 @@ const particleVertex = `
   uniform float uProgress;
   uniform float uPixelRatio;
   uniform vec2 uMouse;
+  uniform vec2 uMouseWorld;
 
   varying float vAlpha;
   varying float vKind;
@@ -40,36 +49,46 @@ const particleVertex = `
   ${glslNoise}
 
   void main() {
-    float open = smoothstep(0.18, 0.38, uProgress);
-    float work = smoothstep(0.34, 0.86, uProgress);
+    float open = smoothstep(0.14, 0.32, uProgress);
+    float work = smoothstep(0.18, 0.78, uProgress);
     float returnMix = smoothstep(0.88, 1.0, uProgress);
-    float burst = smoothstep(0.18, 0.34, uProgress) * (1.0 - smoothstep(0.38, 0.55, uProgress));
+    float burst = smoothstep(0.14, 0.28, uProgress) * (1.0 - smoothstep(0.42, 0.62, uProgress));
 
     vec3 pos = mix(aHome, aFlow, open);
     vec3 core = vec3(0.0, -0.08, -3.2 - uProgress * 38.0);
     vec3 dir = normalize(aFlow - core + vec3(0.001));
     pos += dir * burst * (2.2 + aKind * 1.4);
 
-    float t = uTime * (0.18 + aKind * 0.1) + aPhase;
-    float wave = fbm(pos.xy * 0.45 + vec2(uTime * 0.035, -uTime * 0.026));
-    pos.x += sin(t + pos.z * 0.08) * (0.08 + work * 0.28);
-    pos.y += cos(t * 1.2 + pos.x * 0.16) * (0.06 + work * 0.2);
-    pos.z += sin(t * 1.5 + wave * 3.0) * (0.12 + work * 0.34);
+    float t = uTime * (0.13 + aKind * 0.16) + aPhase;
+    float wave = fbm(pos.xy * 0.36 + aDrift.xy * 0.4 + vec2(uTime * 0.026, -uTime * 0.019));
+    float wander = fbm(vec2(aPhase, pos.z * 0.08) + vec2(uTime * 0.041, uTime * 0.027));
+    pos += aDrift * (0.16 + work * 0.52) * (0.58 + wave * 0.72);
+    pos.x += sin(t + pos.z * 0.11 + wander * 4.0) * (0.1 + work * 0.38);
+    pos.y += cos(t * 1.37 + pos.x * 0.13 + wave * 3.2) * (0.08 + work * 0.3);
+    pos.z += sin(t * 1.63 + wave * 5.0) * (0.16 + work * 0.48);
 
     pos.x += (uMouse.x - 0.5) * (0.38 + work * 0.72);
     pos.y += (uMouse.y - 0.5) * (0.24 + work * 0.5);
 
-    pos = mix(pos, aHome * 0.72 + vec3(0.0, 0.0, -58.0), returnMix * 0.72);
+    vec2 toMouse = pos.xy - uMouseWorld;
+    float mouseDistance = length(toMouse);
+    float ripple = smoothstep(2.2, 0.0, mouseDistance) * work;
+    vec2 mouseDir = normalize(toMouse + vec2(0.001));
+    float pulse = 0.55 + 0.45 * sin(uTime * 8.0 - mouseDistance * 5.2);
+    pos.xy += mouseDir * ripple * (0.09 + 0.06 * pulse);
+    pos.z += ripple * sin(uTime * 3.4 + aPhase) * 0.16;
+
+    pos = mix(pos, aHome * 0.72 + vec3(0.0, 0.0, -44.0), returnMix * 0.36);
 
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     float distanceFade = clamp(1.0 + mvPosition.z * 0.026, 0.1, 1.0);
-    float twinkle = 0.72 + 0.28 * sin(uTime * 2.2 + aPhase * 8.0);
+    float twinkle = 0.64 + 0.36 * sin(uTime * (1.35 + aKind * 2.2) + aPhase * 8.0 + wave * 4.0);
     gl_PointSize = aSize * uPixelRatio * distanceFade * twinkle;
     gl_Position = projectionMatrix * mvPosition;
 
-    vAlpha = distanceFade * (0.28 + open * 0.42 + burst * 0.42 + work * 0.18);
+    vAlpha = distanceFade * (0.36 + open * 0.46 + burst * 0.34 + work * 0.3 + returnMix * 0.2);
     vKind = aKind;
-    vGlow = burst + smoothstep(0.32, 0.9, uProgress) * 0.55;
+    vGlow = burst + smoothstep(0.32, 0.9, uProgress) * 0.55 + ripple * 0.42;
   }
 `;
 
@@ -81,8 +100,8 @@ const particleFragment = `
   varying float vGlow;
 
   vec3 ramp(float k) {
-    vec3 blue = vec3(0.235, 0.427, 1.0);
-    vec3 indigo = vec3(0.431, 0.302, 1.0);
+    vec3 blue = vec3(0.36, 0.47, 1.0);
+    vec3 indigo = vec3(0.50, 0.36, 1.0);
     vec3 pink = vec3(1.0, 0.478, 0.875);
     vec3 orange = vec3(1.0, 0.478, 0.094);
     vec3 gold = vec3(1.0, 0.827, 0.416);
@@ -99,8 +118,8 @@ const particleFragment = `
     float core = smoothstep(0.42, 0.02, d);
     float halo = smoothstep(0.5, 0.0, d) * 0.45;
     vec3 color = ramp(fract(vKind + vGlow * 0.28));
-    color = mix(color, vec3(1.0, 0.95, 0.76), vGlow * 0.22);
-    gl_FragColor = vec4(color * (core + halo * 1.6), (core + halo) * vAlpha);
+    color = mix(color, vec3(1.0, 0.88, 0.48), 0.18 + vGlow * 0.28);
+    gl_FragColor = vec4(color * (core * 1.1 + halo * 2.1), (core + halo * 1.12) * vAlpha);
   }
 `;
 
@@ -150,7 +169,7 @@ function PostEffects() {
     gl.setClearColor(0x000000, 0);
     const effectComposer = new EffectComposer(gl);
     effectComposer.addPass(new RenderPass(scene, camera));
-    effectComposer.addPass(new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 1.22, 0.72, 0.18));
+    effectComposer.addPass(new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 0.68, 0.46, 0.32));
     composer.current = effectComposer;
 
     return () => {
@@ -191,6 +210,12 @@ function CameraRig({ progress }: { progress: number }) {
 function BackgroundWater({ progress }: { progress: number }) {
   const mesh = useRef<THREE.Mesh>(null);
   const mat = useRef<THREE.ShaderMaterial>(null);
+  const tone = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour >= 18 && hour < 23) return { violet: 0.72, blue: 0.44, quiet: 0.08 };
+    if (hour >= 23 || hour < 6) return { violet: 0.92, blue: 0.32, quiet: 0.24 };
+    return { violet: 0.46, blue: 0.68, quiet: 0.02 };
+  }, []);
 
   useFrame(({ clock, pointer }) => {
     if (!mesh.current || !mat.current) return;
@@ -202,7 +227,7 @@ function BackgroundWater({ progress }: { progress: number }) {
   });
 
   return (
-    <mesh ref={mesh} position={[0, 0, -18]} scale={[36, 20, 1]}>
+    <mesh ref={mesh} position={[0, 0, -18]} scale={[36, 20, 1]} raycast={disableRaycast}>
       <planeGeometry args={[1, 1, 120, 72]} />
       <shaderMaterial
         ref={mat}
@@ -237,9 +262,10 @@ function BackgroundWater({ progress }: { progress: number }) {
             vec3 blue = vec3(0.05, 0.16, 0.46);
             vec3 violet = vec3(0.26, 0.13, 0.58);
             vec3 pink = vec3(0.62, 0.2, 0.72);
-            vec3 color = mix(deep, blue, n);
-            color = mix(color, violet, smoothstep(0.32, 0.9, n));
+            vec3 color = mix(deep, blue, n * ${tone.blue.toFixed(2)});
+            color = mix(color, violet, smoothstep(0.32, 0.9, n) * ${tone.violet.toFixed(2)});
             color = mix(color, pink, smoothstep(0.74, 1.0, n) * 0.36);
+            color = mix(color, deep, ${tone.quiet.toFixed(2)});
             float alpha = (0.12 + n * 0.18 + uProgress * 0.05) * core;
             gl_FragColor = vec4(color, alpha);
           }
@@ -258,6 +284,7 @@ function ParticleField({ progress }: { progress: number }) {
     const geo = new THREE.BufferGeometry();
     const home = new Float32Array(particleCount * 3);
     const flow = new Float32Array(particleCount * 3);
+    const drift = new Float32Array(particleCount * 3);
     const size = new Float32Array(particleCount);
     const phase = new Float32Array(particleCount);
     const kind = new Float32Array(particleCount);
@@ -277,6 +304,10 @@ function ParticleField({ progress }: { progress: number }) {
       flow[i * 3 + 1] = (Math.random() - 0.5) * 6 + Math.cos(t * Math.PI * 7) * 0.9;
       flow[i * 3 + 2] = -Math.random() * 62 - 4;
 
+      drift[i * 3] = (Math.random() - 0.5) * 1.8 + Math.sin(arc * 1.7) * 0.28;
+      drift[i * 3 + 1] = (Math.random() - 0.5) * 1.35 + Math.cos(arc * 1.1) * 0.22;
+      drift[i * 3 + 2] = (Math.random() - 0.5) * 1.2;
+
       size[i] = hair ? 3.5 + Math.random() * 8.5 : 1.6 + Math.random() * 7.2;
       phase[i] = Math.random() * Math.PI * 2;
       kind[i] = hair ? 0.78 + Math.random() * 0.22 : Math.random() * 0.72;
@@ -285,6 +316,7 @@ function ParticleField({ progress }: { progress: number }) {
     geo.setAttribute("position", new THREE.BufferAttribute(home, 3));
     geo.setAttribute("aHome", new THREE.BufferAttribute(home, 3));
     geo.setAttribute("aFlow", new THREE.BufferAttribute(flow, 3));
+    geo.setAttribute("aDrift", new THREE.BufferAttribute(drift, 3));
     geo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
     geo.setAttribute("aPhase", new THREE.BufferAttribute(phase, 1));
     geo.setAttribute("aKind", new THREE.BufferAttribute(kind, 1));
@@ -297,12 +329,13 @@ function ParticleField({ progress }: { progress: number }) {
     material.current.uniforms.uProgress.value = progress;
     material.current.uniforms.uPixelRatio.value = gl.getPixelRatio();
     material.current.uniforms.uMouse.value.set(pointer.x * 0.5 + 0.5, pointer.y * 0.5 + 0.5);
+    material.current.uniforms.uMouseWorld.value.set(pointer.x * 5.6, pointer.y * 3.1);
     points.current.rotation.y = pointer.x * 0.06 + progress * 0.16;
     points.current.rotation.x = pointer.y * 0.045;
   });
 
   return (
-    <points ref={points} geometry={geometry}>
+    <points ref={points} geometry={geometry} raycast={disableRaycast}>
       <shaderMaterial
         ref={material}
         transparent
@@ -315,9 +348,503 @@ function ParticleField({ progress }: { progress: number }) {
           uProgress: { value: 0 },
           uPixelRatio: { value: 1 },
           uMouse: { value: new THREE.Vector2(0.5, 0.5) },
+          uMouseWorld: { value: new THREE.Vector2(0, 0) },
         }}
       />
     </points>
+  );
+}
+
+function makeSoftGlowTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(255,215,168,0.32)");
+  gradient.addColorStop(0.28, "rgba(216,199,255,0.16)");
+  gradient.addColorStop(0.62, "rgba(91,126,255,0.06)");
+  gradient.addColorStop(1, "rgba(91,126,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function SoftCursorTrace({ progress }: { progress: number }) {
+  const group = useRef<THREE.Group>(null);
+  const glowTexture = useMemo(() => makeSoftGlowTexture(), []);
+  const traces = useRef(
+    Array.from({ length: 5 }).map(() => ({
+      age: 1,
+      position: new THREE.Vector3(),
+    })),
+  );
+  const materials = useRef<THREE.MeshBasicMaterial[]>([]);
+  const traceIndex = useRef(0);
+  const lastTraceTime = useRef(0);
+
+  useFrame(({ clock, camera, pointer }) => {
+    if (!group.current) return;
+    const work = smoothstep(0.18, 0.82, progress);
+    const target = new THREE.Vector3(camera.position.x + pointer.x * 4.6, camera.position.y + pointer.y * 2.5, camera.position.z - 7.6);
+
+    if (clock.elapsedTime - lastTraceTime.current > 0.12) {
+      traces.current[traceIndex.current] = { age: 0, position: target.clone() };
+      traceIndex.current = (traceIndex.current + 1) % traces.current.length;
+      lastTraceTime.current = clock.elapsedTime;
+    }
+
+    traces.current.forEach((trace, index) => {
+      trace.age = Math.min(1, trace.age + 0.025);
+      const mesh = group.current?.children[index] as THREE.Mesh | undefined;
+      const material = materials.current[index];
+      if (!mesh || !material) return;
+      mesh.position.copy(trace.position);
+      mesh.lookAt(camera.position);
+      const fade = (1 - trace.age) * work;
+      mesh.scale.setScalar(0.7 + trace.age * 1.4);
+      material.opacity = fade * 0.13;
+    });
+  });
+
+  return (
+    <group ref={group} raycast={disableRaycast}>
+      {traces.current.map((_, index) => (
+        <mesh key={index} raycast={disableRaycast}>
+          <planeGeometry args={[1.7, 1.7]} />
+          <meshBasicMaterial
+            ref={(material) => {
+              if (material) materials.current[index] = material;
+            }}
+            map={glowTexture}
+            transparent
+            opacity={0}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function DreamOrbitField({ progress }: { progress: number }) {
+  const group = useRef<THREE.Group>(null);
+  const points = useRef<THREE.Points>(null);
+  const particleCount = useMemo(() => (window.innerWidth < 700 ? 58 : 126), []);
+
+  const trails = useMemo(() => {
+    const colors = ["#d8c7ff", "#ffd7a8", "#b7d7ff", "#f2c6ff"];
+    return Array.from({ length: window.innerWidth < 700 ? 8 : 12 }).map((_, index) => ({
+      color: colors[index % colors.length],
+      position: new THREE.Vector3((index - 5.5) * 0.86, Math.sin(index * 1.13) * 1.35, -7.5 - index * 4.4),
+      rotation: new THREE.Euler(0.22 + index * 0.035, index % 2 ? -0.48 : 0.48, Math.sin(index) * 0.24),
+      scale: new THREE.Vector3(2.9 + index * 0.23, 0.74 + (index % 4) * 0.13, 1),
+    }));
+  }, []);
+
+  const pointGeometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+    const palette = [new THREE.Color("#d8c7ff"), new THREE.Color("#ffd7a8"), new THREE.Color("#b7d7ff")];
+
+    for (let i = 0; i < particleCount; i += 1) {
+      const band = i % 7;
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 2.2 + Math.random() * 4.8;
+      positions[i * 3] = Math.cos(angle) * radius + (band - 3) * 0.8;
+      positions[i * 3 + 1] = Math.sin(angle * 1.8) * 1.9 + (Math.random() - 0.5) * 1.4;
+      positions[i * 3 + 2] = -6 - Math.random() * 66;
+      const color = palette[i % palette.length];
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+    }
+
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    return geo;
+  }, [particleCount]);
+
+  useFrame(({ clock, pointer }) => {
+    if (!group.current || !points.current) return;
+    const work = smoothstep(0.16, 0.82, progress);
+    group.current.position.z = -progress * 22;
+    group.current.rotation.y = pointer.x * 0.08 + Math.sin(clock.elapsedTime * 0.08) * 0.04;
+    group.current.rotation.x = pointer.y * 0.035;
+    group.current.visible = work > 0.02;
+    group.current.children.forEach((child, index) => {
+      const object = child as THREE.Object3D;
+      object.position.y += Math.sin(clock.elapsedTime * 0.2 + index) * 0.0008;
+    });
+    (points.current.material as THREE.PointsMaterial).opacity = 0.12 + work * 0.13;
+  });
+
+  return (
+    <group ref={group} raycast={disableRaycast}>
+      {trails.map((trail, index) => (
+        <mesh key={index} position={trail.position} rotation={trail.rotation} scale={trail.scale} raycast={disableRaycast}>
+          <torusGeometry args={[1, 0.0035, 6, 96]} />
+          <meshBasicMaterial color={trail.color} transparent opacity={0.11} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      ))}
+      <points ref={points} geometry={pointGeometry} raycast={disableRaycast}>
+        <pointsMaterial size={0.045} transparent opacity={0.12} vertexColors depthWrite={false} blending={THREE.AdditiveBlending} />
+      </points>
+    </group>
+  );
+}
+
+function TransitionSparkles({ progress }: { progress: number }) {
+  const points = useRef<THREE.Points>(null);
+  const material = useRef<THREE.PointsMaterial>(null);
+  const particleCount = useMemo(() => (window.innerWidth < 700 ? 180 : 520), []);
+
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const basePositions = new Float32Array(particleCount * 3);
+    const drift = new Float32Array(particleCount * 3);
+    const phase = new Float32Array(particleCount);
+    const colors = new Float32Array(particleCount * 3);
+    const sizes = new Float32Array(particleCount);
+    const palette = [new THREE.Color("#ffe59a"), new THREE.Color("#ffd7a8"), new THREE.Color("#f2c6ff"), new THREE.Color("#b7d7ff")];
+
+    for (let i = 0; i < particleCount; i += 1) {
+      const spread = i / particleCount;
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 1.2 + Math.random() * 8.6;
+      positions[i * 3] = Math.cos(angle) * radius + (Math.random() - 0.5) * 5.2;
+      positions[i * 3 + 1] = Math.sin(angle * 1.25) * (1.8 + Math.random() * 2.8) + (Math.random() - 0.5) * 2.6;
+      positions[i * 3 + 2] = -18 - spread * 40 - Math.random() * 18;
+      basePositions.set(positions.subarray(i * 3, i * 3 + 3), i * 3);
+      drift[i * 3] = (Math.random() - 0.5) * 0.42;
+      drift[i * 3 + 1] = (Math.random() - 0.5) * 0.34;
+      drift[i * 3 + 2] = (Math.random() - 0.5) * 0.46;
+      phase[i] = Math.random() * Math.PI * 2;
+      const color = palette[i % palette.length];
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+      sizes[i] = 0.015 + Math.random() * 0.035;
+    }
+
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+    geo.userData.basePositions = basePositions;
+    geo.userData.drift = drift;
+    geo.userData.phase = phase;
+    return geo;
+  }, [particleCount]);
+
+  useFrame(({ clock, pointer }) => {
+    if (!points.current || !material.current) return;
+    const inOut = smoothstep(0.48, 0.62, progress) * (1 - smoothstep(0.86, 0.94, progress));
+    points.current.visible = inOut > 0.01;
+    points.current.position.z = -progress * 18;
+    points.current.rotation.y = pointer.x * 0.05 + Math.sin(clock.elapsedTime * 0.08) * 0.04;
+    points.current.rotation.x = pointer.y * 0.04;
+    const position = points.current.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const array = position.array as Float32Array;
+    const basePositions = points.current.geometry.userData.basePositions as Float32Array;
+    const drift = points.current.geometry.userData.drift as Float32Array;
+    const phase = points.current.geometry.userData.phase as Float32Array;
+    for (let i = 0; i < particleCount; i += 1) {
+      const offset = i * 3;
+      const t = clock.elapsedTime * (0.16 + (i % 7) * 0.015) + phase[i];
+      array[offset] = basePositions[offset] + Math.sin(t * 1.7) * drift[offset] + Math.cos(t * 0.9) * 0.12;
+      array[offset + 1] = basePositions[offset + 1] + Math.cos(t * 1.23) * drift[offset + 1] + Math.sin(t * 0.63) * 0.1;
+      array[offset + 2] = basePositions[offset + 2] + Math.sin(t * 1.09) * drift[offset + 2];
+    }
+    position.needsUpdate = true;
+    material.current.opacity = 0.08 + inOut * 0.54;
+    material.current.size = 0.034 + Math.sin(clock.elapsedTime * 1.8) * 0.004;
+  });
+
+  return (
+    <points ref={points} geometry={geometry} raycast={disableRaycast}>
+      <pointsMaterial
+        ref={material}
+        size={0.034}
+        transparent
+        opacity={0}
+        vertexColors
+        sizeAttenuation
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  );
+}
+
+const ghostAccentPalette = [
+  "#ffe59a",
+  "#ffd7a8",
+  "#d8c7ff",
+  "#f2c6ff",
+  "#b7d7ff",
+  "#ff9fca",
+  "#c8fff4",
+  "#ffb86b",
+  "#caa8ff",
+  "#9fe7ff",
+];
+
+function getTodayCardDate() {
+  const now = new Date();
+  return `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
+}
+
+function makeGhostTextTexture(fragment: EmotionFragment, accent: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d")!;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "rgba(255,229,154,0.42)";
+  ctx.font = "22px Arial, sans-serif";
+  ctx.letterSpacing = "5px";
+  ctx.fillText(fragment.title.toUpperCase(), canvas.width / 2, 126);
+
+  ctx.shadowColor = accent;
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = "rgba(248,251,255,0.78)";
+  ctx.font = fragment.text.length > 14 ? "48px 'Microsoft YaHei', Arial, sans-serif" : "58px 'Microsoft YaHei', Arial, sans-serif";
+  const chars = fragment.text.split("");
+  const lines =
+    fragment.text.length > 12
+      ? [chars.slice(0, Math.ceil(chars.length / 2)).join(""), chars.slice(Math.ceil(chars.length / 2)).join("")]
+      : [fragment.text];
+
+  lines.forEach((line, index) => {
+    ctx.fillText(line, canvas.width / 2, 254 + (index - (lines.length - 1) / 2) * 64);
+  });
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(255,229,154,0.36)";
+  ctx.font = "18px 'Courier New', monospace";
+  ctx.letterSpacing = "3px";
+  ctx.fillText(`${fragment.emotion.toUpperCase()} / ${getTodayCardDate()}`, canvas.width / 2, 402);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function GhostFragments({
+  progress,
+  fragments,
+  excludeTexts,
+  onSelectFragment,
+}: {
+  progress: number;
+  fragments: EmotionFragment[];
+  excludeTexts?: Set<string>;
+  onSelectFragment?: (fragment: EmotionFragment) => void;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const hoveredGhost = useRef<number | null>(null);
+  const ghostInteraction = useRef<
+    Array<{
+      hover: number;
+      pointer: THREE.Vector2;
+      targetPointer: THREE.Vector2;
+    }>
+  >([]);
+  const ghostFillOpacity = 0.14;
+  const ghostFillVariance = 0.015;
+  const ghostBorderOpacity = 0.24;
+  const ghostBorderVariance = 0.04;
+  const ghostTextOpacity = 0.34;
+  const ghosts = useMemo(
+    () => {
+      const count = window.innerWidth < 700 ? 10 : 20;
+      const source = fragments.filter((fragment, index, all) => {
+        const text = fragment.text.trim();
+        return text && !excludeTexts?.has(text) && all.findIndex((candidate) => candidate.text.trim() === text) === index;
+      });
+      if (source.length === 0) return [];
+
+      const start = 4 % source.length;
+      const visibleCount = Math.min(count, source.length);
+      const orderedFragments = [...source.slice(start), ...source.slice(0, start)];
+      const layout = [
+        [0.15, 2.62, -7.2, 0.56],
+        [-5.85, -2.42, -8.6, 0.62],
+        [6.2, -2.5, -10.6, 0.58],
+        [-7.2, 2.52, -7.6, 0.82],
+        [5.9, 2.08, -10.8, 0.74],
+        [-3.15, 0.72, -13.4, 0.9],
+        [7.05, -1.46, -16.2, 0.82],
+        [-7.6, -2.92, -15.0, 0.54],
+        [7.95, -3.05, -17.8, 0.5],
+        [2.2, 2.72, -18.6, 0.52],
+        [-6.1, -2.34, -19.6, 0.9],
+        [1.42, 2.88, -22.4, 0.68],
+        [3.85, -2.72, -25.6, 0.94],
+        [-8.2, 0.02, -29.6, 0.72],
+        [8.08, 2.38, -33.2, 0.68],
+        [-2.92, -3.25, -36.8, 1.0],
+        [5.0, 0.45, -40.2, 0.76],
+        [-5.0, 2.85, -44.6, 0.64],
+        [7.75, -2.58, -49.0, 0.72],
+        [0.0, -0.15, -53.0, 0.82],
+        [-6.7, -2.65, -56.0, 0.56],
+        [6.95, -2.95, -58.5, 0.54],
+      ];
+
+      return Array.from({ length: visibleCount }).map((_, index) => ({
+        fragment: orderedFragments[index],
+        accent: ghostAccentPalette[index % ghostAccentPalette.length],
+        position: new THREE.Vector3(
+          layout[index % layout.length][0] + Math.sin(index * 1.9) * 0.45,
+          layout[index % layout.length][1] + Math.cos(index * 1.7) * 0.32,
+          layout[index % layout.length][2],
+        ),
+        rotation: new THREE.Euler(
+          Math.sin(index * 0.9) * 0.16,
+          (index % 2 ? -0.5 : 0.48) + Math.sin(index * 1.4) * 0.14,
+          Math.cos(index * 1.3) * 0.2,
+        ),
+        scale: layout[index % layout.length][3],
+      }));
+    },
+    [excludeTexts, fragments],
+  );
+  const textTextures = useMemo(() => ghosts.map((ghost) => makeGhostTextTexture(ghost.fragment, ghost.accent)), [ghosts]);
+
+  useEffect(() => {
+    ghostInteraction.current = ghosts.map(() => ({
+      hover: 0,
+      pointer: new THREE.Vector2(),
+      targetPointer: new THREE.Vector2(),
+    }));
+    hoveredGhost.current = null;
+  }, [ghosts]);
+
+  const handleGhostClick = (fragment: EmotionFragment) => (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation();
+    onSelectFragment?.(fragment);
+  };
+  const handleGhostOver = (index: number) => (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    hoveredGhost.current = index;
+    document.body.style.cursor = "pointer";
+  };
+  const handleGhostOut = (index: number) => (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    if (hoveredGhost.current === index) hoveredGhost.current = null;
+    const state = ghostInteraction.current[index];
+    state?.targetPointer.set(0, 0);
+    if (document.body.style.cursor === "pointer") {
+      document.body.style.cursor = "";
+    }
+  };
+  const handleGhostMove = (index: number) => (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    const state = ghostInteraction.current[index];
+    const parent = event.object.parent;
+    if (!state || !parent) return;
+    const localPoint = parent.worldToLocal(event.point.clone());
+    state.targetPointer.set(
+      THREE.MathUtils.clamp(localPoint.x / 2.4, -1, 1),
+      THREE.MathUtils.clamp(localPoint.y / 1.36, -1, 1),
+    );
+  };
+
+  useEffect(() => {
+    return () => {
+      if (document.body.style.cursor === "pointer") {
+        document.body.style.cursor = "";
+      }
+    };
+  }, []);
+
+  useFrame(({ clock, pointer }) => {
+    if (!group.current) return;
+    const work = smoothstep(0.15, 0.34, progress);
+    group.current.position.z = -progress * 10;
+    group.current.position.x = pointer.x * 0.18;
+    group.current.position.y = pointer.y * 0.1;
+    group.current.visible = work > 0.02;
+    group.current.children.forEach((child, index) => {
+      const object = child as THREE.Group;
+      const ghost = ghosts[index];
+      const state = ghostInteraction.current[index];
+      if (!ghost || !state) return;
+      const targetHover = hoveredGhost.current === index ? 1 : 0;
+      state.hover = THREE.MathUtils.lerp(state.hover, targetHover, 0.14);
+      state.pointer.lerp(state.targetPointer, targetHover ? 0.18 : 0.1);
+
+      object.position.set(
+        ghost.position.x + state.pointer.x * state.hover * 0.16,
+        ghost.position.y + Math.sin(clock.elapsedTime * 0.24 + index) * 0.06 + state.pointer.y * state.hover * 0.12,
+        ghost.position.z + state.hover * 0.42,
+      );
+      object.rotation.set(
+        ghost.rotation.x - state.pointer.y * state.hover * 0.12,
+        ghost.rotation.y + state.pointer.x * state.hover * 0.16,
+        ghost.rotation.z + Math.sin(clock.elapsedTime * 0.18 + index) * 0.035,
+      );
+      const liftScale = ghost.scale * (1 + state.hover * 0.16);
+      object.scale.setScalar(liftScale);
+
+      const fill = object.children[1] as THREE.Mesh | undefined;
+      const border = object.children[2] as THREE.LineSegments | undefined;
+      const text = object.children[3] as THREE.Mesh | undefined;
+      const fillMaterial = fill?.material as THREE.MeshBasicMaterial | undefined;
+      const borderMaterial = border?.material as THREE.LineBasicMaterial | undefined;
+      const textMaterial = text?.material as THREE.MeshBasicMaterial | undefined;
+      if (fillMaterial) fillMaterial.opacity = ghostFillOpacity + (index % 3) * ghostFillVariance + state.hover * 0.08;
+      if (borderMaterial) borderMaterial.opacity = ghostBorderOpacity + (index % 2) * ghostBorderVariance + state.hover * 0.68;
+      if (textMaterial) textMaterial.opacity = ghostTextOpacity + state.hover * 0.42;
+    });
+  });
+
+  return (
+    <group ref={group} raycast={disableRaycast}>
+      {ghosts.map((ghost, index) => (
+        <group key={`${ghost.fragment.id}-${index}`} position={ghost.position} rotation={ghost.rotation} scale={ghost.scale} raycast={disableRaycast}>
+          <mesh
+            position={[0, 0, 0.18]}
+            userData={{ type: "ghost-fragment", fragmentId: ghost.fragment.id }}
+            onClick={handleGhostClick(ghost.fragment)}
+            onPointerOver={handleGhostOver(index)}
+            onPointerMove={handleGhostMove(index)}
+            onPointerOut={handleGhostOut(index)}
+          >
+            <planeGeometry args={[4.8, 2.72]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+          <mesh raycast={disableRaycast}>
+            <planeGeometry args={[4.2, 2.28]} />
+            <meshBasicMaterial
+              color="#020407"
+              transparent
+              opacity={ghostFillOpacity + (index % 3) * ghostFillVariance}
+              depthWrite={false}
+              blending={THREE.NormalBlending}
+            />
+          </mesh>
+          <lineSegments scale={[1.03, 1.04, 1]} raycast={disableRaycast}>
+            <edgesGeometry args={[new THREE.BoxGeometry(4.25, 2.32, 0.04)]} />
+            <lineBasicMaterial color="#e9f9ff" transparent opacity={ghostBorderOpacity + (index % 2) * ghostBorderVariance} blending={THREE.AdditiveBlending} />
+          </lineSegments>
+          <mesh position={[0, 0, 0.1]} raycast={disableRaycast}>
+            <planeGeometry args={[3.7, 1.9]} />
+            <meshBasicMaterial map={textTextures[index]} transparent opacity={ghostTextOpacity} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        </group>
+      ))}
+    </group>
   );
 }
 
@@ -368,11 +895,52 @@ function FluidRibbons({ progress }: { progress: number }) {
   });
 
   return (
-    <group ref={group}>
+    <group ref={group} raycast={disableRaycast}>
       {ribbons.map((ribbon, index) => (
-        <mesh key={index} position={ribbon.position} rotation={ribbon.rotation} scale={ribbon.scale}>
+        <mesh key={index} position={ribbon.position} rotation={ribbon.rotation} scale={ribbon.scale} raycast={disableRaycast}>
           <planeGeometry args={[1, 1, 96, 8]} />
           <primitive object={ribbon.material} attach="material" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function ForegroundLightSheets({ progress }: { progress: number }) {
+  const group = useRef<THREE.Group>(null);
+  const sheets = useMemo(
+    () => {
+      const sheetIndexes = window.innerWidth < 700 ? [0, 2, 3] : [0, 2, 3, 4];
+
+      return sheetIndexes.map((index) => ({
+        color: ["#d8c7ff", "#ffd7a8", "#b7d7ff", "#f2c6ff", "#c8fff4"][index],
+        position: new THREE.Vector3((index - 2) * 2.4, Math.sin(index * 1.4) * 2.1, -4.5 - index * 9.4),
+        rotation: new THREE.Euler(0.08 * Math.sin(index), index % 2 ? -0.32 : 0.32, -0.34 + index * 0.18),
+        scale: new THREE.Vector3(4.2 + index * 0.34, 0.42 + (index % 2) * 0.18, 1),
+      }));
+    },
+    [],
+  );
+
+  useFrame(({ clock, pointer }) => {
+    if (!group.current) return;
+    const work = smoothstep(0.18, 0.85, progress);
+    group.current.position.z = -progress * 34;
+    group.current.rotation.y = pointer.x * 0.035;
+    group.current.children.forEach((child, index) => {
+      const mesh = child as THREE.Mesh;
+      mesh.position.y += Math.sin(clock.elapsedTime * 0.18 + index) * 0.001;
+      const material = mesh.material as THREE.MeshBasicMaterial;
+      material.opacity = (0.035 + (index % 2) * 0.018) * work;
+    });
+  });
+
+  return (
+    <group ref={group} raycast={disableRaycast}>
+      {sheets.map((sheet, index) => (
+        <mesh key={index} position={sheet.position} rotation={sheet.rotation} scale={sheet.scale} raycast={disableRaycast}>
+          <planeGeometry args={[1, 1, 12, 2]} />
+          <meshBasicMaterial color={sheet.color} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} />
         </mesh>
       ))}
     </group>
@@ -389,31 +957,35 @@ function GoldenCore({ progress }: { progress: number }) {
     const open = smoothstep(0.16, 0.38, progress);
     const work = smoothstep(0.4, 0.82, progress);
     const outro = smoothstep(0.88, 1, progress);
-    const pulse = 0.78 + Math.sin(clock.elapsedTime * 2.4) * 0.22;
+    const pulse = 0.92 + Math.sin(clock.elapsedTime * 1.6) * 0.08;
     group.current.position.set(pointer.x * 0.22, -0.42 + pointer.y * 0.12, -3.4 - progress * 42);
-    group.current.scale.setScalar((0.34 + open * 1.25 + outro * 0.85) * pulse);
-    sphere.current.opacity = 0.18 + open * 0.68 + outro * 0.34;
-    light.current.intensity = 1.2 + open * 8 + work * 2 + outro * 5;
+    group.current.scale.setScalar((0.24 + open * 0.78 + outro * 0.48) * pulse);
+    sphere.current.opacity = 0.08 + open * 0.28 + outro * 0.16;
+    light.current.intensity = 0.5 + open * 2.4 + work * 0.7 + outro * 1.4;
   });
 
   return (
     <group ref={group} position={[0, -0.42, -3.4]}>
-      <pointLight ref={light} color="#ffd36a" intensity={2.2} distance={18} decay={1.6} />
-      <mesh>
+      <pointLight ref={light} color="#ffd36a" intensity={0.9} distance={13} decay={1.8} />
+      <mesh raycast={disableRaycast}>
         <sphereGeometry args={[0.52, 48, 32]} />
-        <meshBasicMaterial ref={sphere} color="#ffe59a" transparent opacity={0.38} blending={THREE.AdditiveBlending} depthWrite={false} />
+        <meshBasicMaterial ref={sphere} color="#ffe59a" transparent opacity={0.16} blending={THREE.AdditiveBlending} depthWrite={false} />
       </mesh>
       {Array.from({ length: 4 }).map((_, i) => (
-        <mesh key={i} rotation={[Math.PI / 2, 0, (i * Math.PI) / 4]}>
+        <mesh key={i} rotation={[Math.PI / 2 + i * 0.08, 0.18 * Math.sin(i), (i * Math.PI) / 4]} scale={[1.55 + i * 0.16, 0.62 + i * 0.08, 1]} raycast={disableRaycast}>
           <torusGeometry args={[0.92 + i * 0.34, 0.012, 8, 96]} />
-          <meshBasicMaterial color={i % 2 ? "#ff7adf" : "#ffd36a"} transparent opacity={0.28} blending={THREE.AdditiveBlending} depthWrite={false} />
+          <meshBasicMaterial color={i % 2 ? "#b7d7ff" : "#ffd7a8"} transparent opacity={0.13} blending={THREE.AdditiveBlending} depthWrite={false} />
         </mesh>
       ))}
     </group>
   );
 }
 
-function SceneContent({ progress, activeIndex }: SceneProps) {
+function SceneContent({ progress, activeIndex, fragments, ambientFragments = fragments, onSelectFragment }: SceneProps) {
+  const showLegacyEmotionCards = progress < 0.985;
+  const primaryTexts = useMemo(() => new Set(fragments.map((fragment) => fragment.text.trim())), [fragments]);
+  const activeGlowColor = fragments[activeIndex]?.glowColor ?? "#ffe59a";
+
   return (
     <>
       <fog attach="fog" args={["#050817", 10, 78]} />
@@ -423,14 +995,36 @@ function SceneContent({ progress, activeIndex }: SceneProps) {
       <pointLight position={[4.5, -1.5, -30]} intensity={3.2} color="#ff7adf" />
       <CameraRig progress={progress} />
       <BackgroundWater progress={progress} />
+      <DreamOrbitField progress={progress} />
+      <TransitionSparkles progress={progress} />
+      {showLegacyEmotionCards && (
+        <GhostFragments
+          progress={progress}
+          fragments={ambientFragments}
+          excludeTexts={primaryTexts}
+          onSelectFragment={onSelectFragment}
+        />
+      )}
       <FluidRibbons progress={progress} />
+      <ForegroundLightSheets progress={progress} />
       <ParticleField progress={progress} />
+      <OrbitalFrame progress={progress} activeColor={activeGlowColor} />
+      <SoftCursorTrace progress={progress} />
       <GoldenCore progress={progress} />
-      <group>
-        {PROJECTS.map((project, index) => (
-          <ProjectCard key={project.id} project={project} progress={progress} index={index} activeIndex={activeIndex} />
-        ))}
-      </group>
+      {showLegacyEmotionCards && (
+        <group>
+          {fragments.map((project, index) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              progress={progress}
+              index={index}
+              activeIndex={activeIndex}
+              onSelect={onSelectFragment}
+            />
+          ))}
+        </group>
+      )}
       <PostEffects />
     </>
   );

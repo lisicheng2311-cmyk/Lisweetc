@@ -1,0 +1,227 @@
+.interactive-showcase {
+  --mx: 0.5;
+  --my: 0.5;
+  position: fixed;
+  inset: 8vh 6vw auto;
+  z-index: 7;
+  min-height: min(74vh, 760px);
+  display: grid;
+  grid-template-columns: minmax(220px, 0.78fr) minmax(280px, 1.2fr);
+  gap: clamp(24px, 5vw, 72px);
+  align-items: center;
+  padding: clamp(22px, 4vw, 52px);
+  pointer-events: auto;
+  opacity: calc(clamp(0, (var(--page-progress) - 0.34) * 7, 1) * (1 - clamp(0, (var(--page-progress) - 0.66) * 7, 1)));
+  transform:
+    translate3d(0, calc((0.5 - var(--my)) * 18px), 0)
+    perspective(1100px)
+    rotateX(calc((0.5 - var(--my)) * 4deg))
+    rotateY(calc((var(--mx) - 0.5) * 5deg));
+  transform-style: preserve-3d;
+  transition: opacity 320ms ease;
+}
+
+.interactive-showcase::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  border: 1px solid rgba(255, 229, 154, 0.18);
+  background:
+    radial-gradient(circle at calc(var(--mx) * 100%) calc(var(--my) * 100%), rgba(255, 229, 154, 0.2), transparent 24%),
+    linear-gradient(135deg, rgba(248, 251, 255, 0.07), rgba(120, 154, 255, 0.03) 42%, rgba(255, 122, 223, 0.05));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 26px 70px rgba(5, 8, 23, 0.34);
+  backdrop-filter: blur(18px) saturate(1.24);
+}
+
+.interactive-showcase::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  z-index: -4;
+  background:
+    radial-gradient(circle at 16% 24%, rgba(60, 109, 255, 0.2), transparent 25%),
+    radial-gradient(circle at 82% 72%, rgba(255, 159, 202, 0.17), transparent 26%),
+    radial-gradient(circle at 50% 46%, rgba(255, 211, 106, 0.12), transparent 31%);
+  filter: blur(18px);
+  opacity: 0.94;
+}
+
+.interactive-particles {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+.interactive-depth-layer {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid rgba(248, 251, 255, 0.1);
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.08), transparent 48%),
+    radial-gradient(circle, rgba(255, 229, 154, 0.16), transparent 62%);
+  transform-style: preserve-3d;
+}
+
+.depth-a {
+  width: clamp(180px, 20vw, 310px);
+  height: clamp(180px, 20vw, 310px);
+  right: 8%;
+  top: 10%;
+  transform: translateZ(-80px) rotate(18deg);
+  opacity: 0.42;
+}
+
+.depth-b {
+  width: clamp(110px, 14vw, 210px);
+  height: clamp(110px, 14vw, 210px);
+  left: 34%;
+  bottom: 7%;
+  transform: translateZ(-140px) rotate(-12deg);
+  opacity: 0.28;
+}
+
+.interactive-showcase-copy {
+  transform: translateZ(58px);
+}
+
+.interactive-showcase-copy p,
+.interactive-glass-card span {
+  margin: 0 0 12px;
+  color: rgba(255, 229, 154, 0.7);
+  font-size: clamp(0.68rem, 1vw, 0.78rem);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.interactive-showcase-copy h2 {
+  max-width: 11ch;
+  margin: 0;
+  color: rgba(248, 251, 255, 0.92);
+  font-size: clamp(2rem, 5.6vw, 5.4rem);
+  font-weight: 600;
+  line-height: 0.98;
+  text-shadow: 0 0 32px rgba(255, 211, 106, 0.18);
+}
+
+.interactive-card-track {
+  position: relative;
+  min-height: clamp(310px, 48vh, 470px);
+  transform: translateZ(92px);
+}
+
+.interactive-glass-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(390px, 64vw);
+  min-height: 250px;
+  padding: clamp(20px, 3vw, 30px);
+  border: 1px solid color-mix(in srgb, var(--card-accent) 42%, transparent);
+  background:
+    linear-gradient(140deg, rgba(248, 251, 255, 0.17), rgba(248, 251, 255, 0.05) 48%, rgba(5, 8, 23, 0.28)),
+    radial-gradient(circle at 20% 16%, color-mix(in srgb, var(--card-accent) 26%, transparent), transparent 42%);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.28),
+    0 0 34px color-mix(in srgb, var(--card-accent) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(20px) saturate(1.35);
+  transform:
+    translate3d(calc(-50% + var(--card-offset) * 64%), -50%, calc((1 - var(--card-distance)) * 80px))
+    rotateY(calc(var(--card-offset) * -16deg))
+    rotateZ(calc(var(--card-offset) * 1.2deg));
+  opacity: calc(1 - min(var(--card-distance) * 0.38, 0.72));
+  transition:
+    transform 620ms cubic-bezier(0.2, 0.78, 0.2, 1),
+    opacity 420ms ease,
+    border-color 320ms ease;
+}
+
+.interactive-glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 1px solid rgba(248, 251, 255, 0.08);
+  pointer-events: none;
+}
+
+.interactive-glass-card h3 {
+  margin: 0 0 18px;
+  color: rgba(248, 251, 255, 0.95);
+  font-size: clamp(1.55rem, 3vw, 2.8rem);
+  font-weight: 500;
+  line-height: 1.04;
+}
+
+.interactive-glass-card p {
+  max-width: 29ch;
+  margin: 0;
+  color: rgba(248, 251, 255, 0.68);
+  font-size: clamp(0.92rem, 1.35vw, 1.05rem);
+  line-height: 1.75;
+}
+
+.interactive-controls {
+  position: absolute;
+  right: clamp(22px, 3vw, 42px);
+  bottom: clamp(20px, 3vw, 34px);
+  z-index: 3;
+  display: flex;
+  gap: 10px;
+  transform: translateZ(120px);
+}
+
+.interactive-controls button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.interactive-controls span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: rgba(248, 251, 255, 0.26);
+  transition:
+    background 220ms ease,
+    transform 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.interactive-controls .is-active span {
+  background: var(--pale-gold);
+  box-shadow: 0 0 16px rgba(255, 229, 154, 0.5);
+  transform: scaleX(1.45);
+}
+
+@media (max-width: 760px) {
+  .interactive-showcase {
+    inset: 10vh 16px auto;
+    grid-template-columns: 1fr;
+    min-height: 72vh;
+    gap: 18px;
+  }
+
+  .interactive-showcase-copy h2 {
+    max-width: 12ch;
+  }
+
+  .interactive-card-track {
+    min-height: 330px;
+  }
+
+  .interactive-glass-card {
+    width: min(86vw, 360px);
+    transform:
+      translate3d(calc(-50% + var(--card-offset) * 46%), -50%, calc((1 - var(--card-distance)) * 58px))
+      rotateY(calc(var(--card-offset) * -10deg));
+  }
+}

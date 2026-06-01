@@ -21,4 +21,7 @@ export const projectPalette = [
   { color: "#ff7adf", secondary: "#3c6dff" },
   { color: "#ff7a18", secondary: "#ffe59a" },
   { color: "#ffd36a", secondary: "#8c5cff" },
+  { color: "#3c6dff", secondary: "#ff7adf" },
+  { color: "#d86cff", secondary: "#ffd36a" },
+  { color: "#ff9f1c", secondary: "#6e4dff" },
 ];
