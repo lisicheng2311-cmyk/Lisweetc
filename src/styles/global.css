@@ -65,7 +65,33 @@ button {
   z-index: 1;
   width: 100vw !important;
   height: 100vh !important;
-  opacity: calc(1 - clamp(0, (var(--page-progress) - 0.86) * 7, 1));
+  opacity: max(var(--second-page-opacity, 1), calc(1 - var(--garden-ready, 0)));
+}
+
+.page-transition-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  opacity: var(--transition-backdrop-opacity, 0);
+  background:
+    radial-gradient(ellipse at 48% 44%, rgba(255, 215, 168, 0.16), transparent 28%),
+    radial-gradient(ellipse at 34% 62%, rgba(216, 108, 255, 0.18), transparent 36%),
+    radial-gradient(ellipse at 70% 58%, rgba(60, 109, 255, 0.16), transparent 40%),
+    radial-gradient(circle at 18% 28%, rgba(248, 251, 255, 0.08) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 72% 34%, rgba(255, 229, 154, 0.1) 0 1.2px, transparent 2.4px),
+    radial-gradient(circle at 58% 78%, rgba(183, 215, 255, 0.08) 0 1px, transparent 2px),
+    linear-gradient(180deg, rgba(5, 8, 23, 0.28), rgba(8, 12, 38, 0.38));
+  background-size:
+    auto,
+    auto,
+    auto,
+    128px 106px,
+    211px 173px,
+    307px 251px,
+    auto;
+  mix-blend-mode: screen;
+  filter: saturate(1.12);
 }
 
 .hero-video-stage {
@@ -212,7 +238,7 @@ button {
   inset: 0;
   z-index: 4;
   pointer-events: none;
-  opacity: calc(clamp(0, (var(--page-progress) - 0.42) * 5, 1) * (1 - clamp(0, (var(--page-progress) - 0.84) * 4, 1)));
+  opacity: calc(clamp(0, (var(--page-progress) - 0.42) * 5, 1) * (1 - clamp(0, (var(--page-progress) - 0.94) * 5, 1)));
   background:
     radial-gradient(ellipse at 50% 54%, rgba(255, 215, 168, 0.1), transparent 30%),
     radial-gradient(ellipse at 47% 58%, rgba(255, 211, 106, 0.18), transparent 24%),

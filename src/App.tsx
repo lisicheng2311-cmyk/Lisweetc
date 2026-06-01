@@ -111,6 +111,7 @@ export default function App() {
   const [emotionFeedback, setEmotionFeedback] = useState("");
   const [isSubmittingEmotion, setIsSubmittingEmotion] = useState(false);
   const [submissionEffect, setSubmissionEffect] = useState<SubmissionEffect | null>(null);
+  const [isGardenVideoReady, setIsGardenVideoReady] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -187,11 +188,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const thirdPageOpacity = smoothProgress((scrollProgress - 0.76) / 0.18);
+    const secondPageOpacity = 1 - thirdPageOpacity;
+    const transitionBackdropOpacity =
+      smoothProgress((scrollProgress - 0.7) / 0.08) * (1 - smoothProgress((scrollProgress - 0.95) / 0.05));
+
     document.body.classList.toggle("is-work", scrollProgress > 0.28 && scrollProgress < 0.72);
     document.body.classList.toggle("is-outro", scrollProgress >= 0.62 && scrollProgress < 0.86);
     document.body.classList.toggle("is-garden", scrollProgress >= 0.78);
     document.body.style.setProperty("--page-progress", String(scrollProgress));
-  }, [scrollProgress]);
+    document.body.style.setProperty("--garden-ready", isGardenVideoReady ? "1" : "0");
+    document.body.style.setProperty("--second-page-opacity", String(isGardenVideoReady ? secondPageOpacity : 1));
+    document.body.style.setProperty("--third-page-opacity", String(thirdPageOpacity));
+    document.body.style.setProperty("--transition-backdrop-opacity", String(transitionBackdropOpacity));
+  }, [isGardenVideoReady, scrollProgress]);
 
   const activeIndex = useMemo(() => {
     const projectStart = 0.3;
@@ -288,7 +298,8 @@ export default function App() {
       />
       <Navigation progress={scrollProgress} activeIndex={activeIndex} fragments={fragments} />
       <MusicToggle />
-      <GardenLanding progress={scrollProgress} />
+      <GardenLanding progress={scrollProgress} onVideoReadyChange={setIsGardenVideoReady} />
+      <div className="page-transition-backdrop" aria-hidden="true" />
       {submissionEffect && (
         <>
           <CosmicToast

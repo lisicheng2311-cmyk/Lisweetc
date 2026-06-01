@@ -1,7 +1,8 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 type GardenLandingProps = {
   progress: number;
+  onVideoReadyChange?: (ready: boolean) => void;
 };
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
@@ -11,32 +12,47 @@ const smoothProgress = (value: number) => {
   return t * t * (3 - 2 * t);
 };
 
-const particleSeed = (index: number, salt = 0) => {
-  const value = Math.sin(index * 37.719 + salt * 19.371) * 10000;
-  return value - Math.floor(value);
-};
+const gardenVideoSrc = `${import.meta.env.BASE_URL}media/新尾页.mp4`;
 
-const finalParticles = Array.from({ length: 92 }, (_, index) => ({
-  id: index,
-  x: particleSeed(index, 1) * 100,
-  y: particleSeed(index, 2) * 100,
-  size: 1.2 + particleSeed(index, 3) * 3.8,
-  opacity: 0.28 + particleSeed(index, 4) * 0.58,
-  duration: 9 + particleSeed(index, 5) * 18,
-  delay: -particleSeed(index, 6) * 18,
-  dx1: -34 + particleSeed(index, 7) * 68,
-  dy1: -28 + particleSeed(index, 8) * 56,
-  dx2: -48 + particleSeed(index, 9) * 96,
-  dy2: -42 + particleSeed(index, 10) * 84,
-  hue: particleSeed(index, 11),
-}));
-
-export default function GardenLanding({ progress }: GardenLandingProps) {
-  const reveal = smoothProgress(range(progress, 0.82, 0.97));
-  const settle = range(progress, 0.84, 0.99);
-  const backdrop = range(progress, 0.9, 0.99);
-  const camera = smoothProgress(range(progress, 0.82, 0.97));
+export default function GardenLanding({ progress, onVideoReadyChange }: GardenLandingProps) {
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const mainVideoRef = useRef<HTMLVideoElement>(null);
+  const reveal = smoothProgress(range(progress, 0.76, 0.94));
+  const settle = range(progress, 0.78, 0.98);
+  const backdrop = range(progress, 0.84, 0.98);
+  const camera = smoothProgress(range(progress, 0.76, 0.94));
   const enter = reveal;
+
+  useEffect(() => {
+    const preload = document.createElement("link");
+    preload.rel = "preload";
+    preload.as = "video";
+    preload.href = gardenVideoSrc;
+    preload.type = "video/mp4";
+    document.head.appendChild(preload);
+
+    return () => {
+      preload.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    onVideoReadyChange?.(isVideoReady);
+  }, [isVideoReady, onVideoReadyChange]);
+
+  useEffect(() => {
+    const video = mainVideoRef.current;
+    if (!video) return;
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      setIsVideoReady(true);
+      return;
+    }
+    video.load();
+  }, []);
+
+  const handleVideoReady = () => {
+    setIsVideoReady(true);
+  };
 
   return (
     <section
@@ -48,62 +64,36 @@ export default function GardenLanding({ progress }: GardenLandingProps) {
           "--garden-growth": reveal,
           "--garden-backdrop": backdrop,
           "--garden-camera": camera,
+          "--garden-video-ready": isVideoReady ? 1 : 0,
         } as CSSProperties
       }
       aria-label="Light Unfolds in Silence"
     >
-      <div className="garden-final-decor" aria-hidden="true">
-        <div className="garden-final-stars garden-final-stars-a" />
-        <div className="garden-final-stars garden-final-stars-b" />
-        <div className="garden-final-particles">
-          {finalParticles.map((particle) => (
-            <span
-              className="garden-final-particle"
-              key={particle.id}
-              style={
-                {
-                  "--particle-x": `${particle.x}%`,
-                  "--particle-y": `${particle.y}%`,
-                  "--particle-size": `${particle.size}px`,
-                  "--particle-opacity": particle.opacity,
-                  "--particle-duration": `${particle.duration}s`,
-                  "--particle-delay": `${particle.delay}s`,
-                  "--particle-dx-1": `${particle.dx1}px`,
-                  "--particle-dy-1": `${particle.dy1}px`,
-                  "--particle-dx-2": `${particle.dx2}px`,
-                  "--particle-dy-2": `${particle.dy2}px`,
-                  "--particle-hue": particle.hue,
-                } as CSSProperties
-              }
-            />
-          ))}
-        </div>
-        <div className="garden-final-comet garden-final-comet-a" />
-        <div className="garden-final-comet garden-final-comet-b" />
-        <div className="garden-final-veil" />
-      </div>
-
       <div className="garden-video-backdrop" aria-hidden="true">
         <video
-          src={`${import.meta.env.BASE_URL}media/新尾页.mp4`}
+          src={gardenVideoSrc}
           muted
           autoPlay
           loop
           playsInline
           preload="auto"
+          onLoadedData={handleVideoReady}
+          onCanPlay={handleVideoReady}
         />
       </div>
 
       <div className="garden-video-wrap" aria-hidden="true">
         <video
-          src={`${import.meta.env.BASE_URL}media/新尾页.mp4`}
+          ref={mainVideoRef}
+          src={gardenVideoSrc}
           muted
           autoPlay
           loop
           playsInline
           preload="auto"
+          onLoadedData={handleVideoReady}
+          onCanPlay={handleVideoReady}
         />
-        <div className="garden-video-grade" />
       </div>
 
     </section>
