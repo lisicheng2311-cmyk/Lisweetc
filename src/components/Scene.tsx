@@ -659,14 +659,14 @@ function GhostFragments({
       targetPointer: THREE.Vector2;
     }>
   >([]);
-  const ghostFillOpacity = 0.14;
-  const ghostFillVariance = 0.015;
-  const ghostBorderOpacity = 0.24;
-  const ghostBorderVariance = 0.04;
-  const ghostTextOpacity = 0.34;
+  const ghostFillOpacity = 0.1;
+  const ghostFillVariance = 0.012;
+  const ghostBorderOpacity = 0.18;
+  const ghostBorderVariance = 0.035;
+  const ghostTextOpacity = 0.28;
   const ghosts = useMemo(
     () => {
-      const count = window.innerWidth < 700 ? 10 : 20;
+      const count = window.innerWidth < 700 ? 12 : 24;
       const source = fragments.filter((fragment, index, all) => {
         const text = fragment.text.trim();
         return text && !excludeTexts?.has(text) && all.findIndex((candidate) => candidate.text.trim() === text) === index;
@@ -674,35 +674,44 @@ function GhostFragments({
       if (source.length === 0) return [];
 
       const start = 4 % source.length;
-      const visibleCount = Math.min(count, source.length);
+      const visibleCount = Math.min(count, source.length + 5);
       const orderedFragments = [...source.slice(start), ...source.slice(0, start)];
       const layout = [
-        [0.15, 2.62, -7.2, 0.56],
-        [-5.85, -2.42, -8.6, 0.62],
-        [6.2, -2.5, -10.6, 0.58],
-        [-7.2, 2.52, -7.6, 0.82],
-        [5.9, 2.08, -10.8, 0.74],
-        [-3.15, 0.72, -13.4, 0.9],
-        [7.05, -1.46, -16.2, 0.82],
-        [-7.6, -2.92, -15.0, 0.54],
-        [7.95, -3.05, -17.8, 0.5],
-        [2.2, 2.72, -18.6, 0.52],
-        [-6.1, -2.34, -19.6, 0.9],
-        [1.42, 2.88, -22.4, 0.68],
-        [3.85, -2.72, -25.6, 0.94],
-        [-8.2, 0.02, -29.6, 0.72],
-        [8.08, 2.38, -33.2, 0.68],
-        [-2.92, -3.25, -36.8, 1.0],
-        [5.0, 0.45, -40.2, 0.76],
-        [-5.0, 2.85, -44.6, 0.64],
-        [7.75, -2.58, -49.0, 0.72],
-        [0.0, -0.15, -53.0, 0.82],
-        [-6.7, -2.65, -56.0, 0.56],
-        [6.95, -2.95, -58.5, 0.54],
+        [-9.35, 2.7, -8.8, 1.06],
+        [-6.45, 2.48, -12.6, 0.72],
+        [-2.35, 2.12, -10.8, 0.86],
+        [1.55, -0.98, -13.2, 1.0],
+        [4.32, 0.92, -16.4, 0.84],
+        [7.65, 2.05, -18.2, 0.62],
+        [9.15, -2.02, -20.8, 0.74],
+        [5.78, -2.72, -23.6, 0.94],
+        [-0.28, -2.46, -25.0, 0.66],
+        [-4.72, -2.94, -27.8, 0.58],
+        [1.05, 3.58, -30.2, 0.54],
+        [9.45, 0.82, -33.6, 0.48],
+        [-7.85, -4.02, -36.0, 0.7],
+        [0.82, -4.08, -39.4, 0.52],
+        [7.75, -4.05, -42.6, 0.6],
+        [5.85, 3.08, -46.4, 0.5],
+        [8.85, 0.42, -50.2, 0.56],
+        [8.02, -3.36, -53.8, 0.52],
+        [3.55, -3.62, -57.4, 0.64],
+        [-1.92, -3.55, -61.2, 0.5],
+        [-7.05, -3.38, -65.0, 0.46],
+        [-10.0, 2.0, -69.2, 0.44],
+        [-4.1, 2.05, -73.6, 0.56],
+        [4.45, 2.05, -78.0, 0.48],
+      ];
+      const extraLayout = [
+        [0.15, 4.35, -18.8, 0.46],
+        [9.4, 1.72, -24.8, 0.44],
+        [-7.7, -4.42, -32.8, 0.5],
+        [0.9, -4.48, -41.8, 0.42],
+        [7.75, -4.34, -55.8, 0.46],
       ];
 
-      return Array.from({ length: visibleCount }).map((_, index) => ({
-        fragment: orderedFragments[index],
+      const baseGhosts = Array.from({ length: visibleCount }).map((_, index) => ({
+        fragment: orderedFragments[index % orderedFragments.length],
         accent: ghostAccentPalette[index % ghostAccentPalette.length],
         position: new THREE.Vector3(
           layout[index % layout.length][0] + Math.sin(index * 1.9) * 0.45,
@@ -716,6 +725,27 @@ function GhostFragments({
         ),
         scale: layout[index % layout.length][3],
       }));
+
+      const extraGhosts = extraLayout.map((slot, extraIndex) => {
+        const index = visibleCount + extraIndex;
+        return {
+          fragment: orderedFragments[index % orderedFragments.length],
+          accent: ghostAccentPalette[index % ghostAccentPalette.length],
+          position: new THREE.Vector3(
+            slot[0] + Math.sin(index * 1.9) * 0.45,
+            slot[1] + Math.cos(index * 1.7) * 0.32,
+            slot[2],
+          ),
+          rotation: new THREE.Euler(
+            Math.sin(index * 0.9) * 0.16,
+            (index % 2 ? -0.5 : 0.48) + Math.sin(index * 1.4) * 0.14,
+            Math.cos(index * 1.3) * 0.2,
+          ),
+          scale: slot[3],
+        };
+      });
+
+      return [...baseGhosts, ...extraGhosts];
     },
     [excludeTexts, fragments],
   );
